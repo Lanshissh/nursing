@@ -17,7 +17,7 @@ $stats = [
       <div class="card-body">
         <h6 class="text-muted">Patients</h6>
         <h2 class="fw-bold"><?php echo (int)$stats['patients']; ?></h2>
-        <a class="btn btn-sm btn-outline-primary" href="/public/patients/index.php">Manage</a>
+        <a class="btn btn-sm btn-outline-primary" href="patients/index.php">Manage</a>
       </div>
     </div>
   </div>
@@ -26,7 +26,7 @@ $stats = [
       <div class="card-body">
         <h6 class="text-muted">Check-ups</h6>
         <h2 class="fw-bold"><?php echo (int)$stats['checkups']; ?></h2>
-        <a class="btn btn-sm btn-outline-primary" href="/public/checkups/index.php">Manage</a>
+        <a class="btn btn-sm btn-outline-primary" href="checkups/index.php">Manage</a>
       </div>
     </div>
   </div>
@@ -35,7 +35,7 @@ $stats = [
       <div class="card-body">
         <h6 class="text-muted">BP Readings</h6>
         <h2 class="fw-bold"><?php echo (int)$stats['bp']; ?></h2>
-        <a class="btn btn-sm btn-outline-primary" href="/public/bp/index.php">Manage</a>
+        <a class="btn btn-sm btn-outline-primary" href="bp/index.php">Manage</a>
       </div>
     </div>
   </div>
@@ -44,7 +44,7 @@ $stats = [
       <div class="card-body">
         <h6 class="text-muted">In-Patient</h6>
         <h2 class="fw-bold"><?php echo (int)$stats['inpt']; ?></h2>
-        <a class="btn btn-sm btn-outline-primary" href="/public/inpatient/index.php">Manage</a>
+        <a class="btn btn-sm btn-outline-primary" href="inpatient/index.php">Manage</a>
       </div>
     </div>
   </div>

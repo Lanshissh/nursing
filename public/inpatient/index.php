@@ -28,14 +28,14 @@ if ($patient_id) {
 }
 $rows = $stmt->fetchAll();
 
-include __DIR__ . "/../../partials/header.php";
+include __DIR__ . "/../../partials/header1.php";
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h3 class="mb-0">In-Patient Admissions <?php if($patient){ echo "for ".htmlspecialchars($patient['last_name'].', '.$patient['first_name']); } ?></h3>
     <div class="text-muted small">Latest 200 shown.</div>
   </div>
-  <a class="btn btn-primary" href="/public/inpatient/new.php<?php if($patient_id) echo '?patient_id='.$patient_id; ?>">+ New Admission</a>
+  <a class="btn btn-primary" href="new.php<?php if($patient_id) echo '?patient_id='.$patient_id; ?>">+ New Admission</a>
 </div>
 
 <?php if (isset($_GET['msg'])): ?>

@@ -21,11 +21,11 @@ if ($q) {
 }
 $rows = $stmt->fetchAll();
 
-include __DIR__ . "/../../partials/header.php";
+include __DIR__ . "/../../partials/header1.php";
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h3 class="mb-0">Patients</h3>
-  <a class="btn btn-primary" href="/public/patients/new.php">+ Add Patient</a>
+  <a class="btn btn-primary" href="new.php">+ Add Patient</a>
 </div>
 
 <form class="row g-2 mb-3" method="get">

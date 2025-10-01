@@ -13,16 +13,16 @@ if (!isset($page_title)) { $page_title = 'Clinic System'; }
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="../public/index.php">Clinic System</a>
+    <a class="navbar-brand fw-bold" href="../../public/index.php">Clinic System</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsExample">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarsExample">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="../public/patients/index.php">Patients</a></li>
-        <li class="nav-item"><a class="nav-link" href="../public/checkups/index.php">Check-ups</a></li>
-        <li class="nav-item"><a class="nav-link" href="../public/bp/index.php">BP Monitoring</a></li>
-        <li class="nav-item"><a class="nav-link" href="../public/inpatient/index.php">In-Patient</a></li>
+        <li class="nav-item"><a class="nav-link" href="../../public/patients/index.php">Patients</a></li>
+        <li class="nav-item"><a class="nav-link" href="../../public/checkups/index.php">Check-ups</a></li>
+        <li class="nav-item"><a class="nav-link" href="../../public/bp/index.php">BP Monitoring</a></li>
+        <li class="nav-item"><a class="nav-link" href="../../public/inpatient/index.php">In-Patient</a></li>
       </ul>
     </div>
   </div>

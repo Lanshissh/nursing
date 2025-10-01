@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   exit;
 }
 
-include __DIR__ . "/../../partials/header.php";
+include __DIR__ . "/../../partials/header1.php";
 ?>
 <h3>Add Patient</h3>
 <form method="post" class="form-section">
@@ -46,7 +46,7 @@ include __DIR__ . "/../../partials/header.php";
   </div>
   <div class="mt-3">
     <button class="btn btn-primary">Save</button>
-    <a class="btn btn-secondary" href="/public/patients/index.php">Cancel</a>
+    <a class="btn btn-secondary" href="index.php">Cancel</a>
   </div>
 </form>
 <?php include __DIR__ . "/../../partials/footer.php"; ?>

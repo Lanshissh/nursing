@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // patients for select
 $patients = $pdo->query("SELECT id, first_name, last_name FROM patients ORDER BY last_name, first_name")->fetchAll();
 
-include __DIR__ . "/../../partials/header.php";
+include __DIR__ . "/../../partials/header1.php";
 ?>
 <h3>New In-Patient Admission</h3>
 <form method="post" class="form-section">
@@ -55,7 +55,7 @@ include __DIR__ . "/../../partials/header.php";
   </div>
   <div class="mt-3">
     <button class="btn btn-primary">Save</button>
-    <a class="btn btn-secondary" href="/public/inpatient/index.php<?php if($patient_id) echo '?patient_id='.$patient_id; ?>">Cancel</a>
+    <a class="btn btn-secondary" href="index.php<?php if($patient_id) echo '?patient_id='.$patient_id; ?>">Cancel</a>
   </div>
 </form>
 <?php include __DIR__ . "/../../partials/footer.php"; ?>
