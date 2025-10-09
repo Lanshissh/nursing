@@ -567,4 +567,16 @@ body {
   </div>
 </div>
 
+<?php include __DIR__ . "/../partials/footer.php"; ?>class="form-control" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Reading</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <?php include __DIR__ . "/../partials/footer.php"; ?>

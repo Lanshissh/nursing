@@ -255,7 +255,7 @@ body {
     <h1 class="page-title">In-Patient Admissions</h1>
     <div class="header-actions">
       <a
-        href="/public/inpatient/new.php<?php echo $patient_id ? ('?patient_id='.(int)$patient_id) : '';?>"
+        href="new.php<?php echo $patient_id ? ('?patient_id='.(int)$patient_id) : '';?>"
         class="btn-primary-custom"
         data-bs-toggle="modal"
         data-bs-target="#modalCrud"
