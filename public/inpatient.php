@@ -2,6 +2,169 @@
 $page_title = "In-Patient Admissions";
 require_once __DIR__ . "/../config.php";
 
+// Handle Create
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
+  try {
+    $stmt = $pdo->prepare("
+      INSERT INTO inpatient_admissions 
+      (patient_id, admit_date, discharge_date, ward, bed, physician, diagnosis, treatment, notes) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+      (int)$_POST['patient_id'],
+      $_POST['admit_date'] ?: null,
+      !empty($_POST['discharge_date']) ? $_POST['discharge_date'] : null,
+      trim($_POST['ward']),
+      trim($_POST['bed']),
+      trim($_POST['physician']),
+      trim($_POST['diagnosis']),
+      trim($_POST['treatment']),
+      trim($_POST['notes'])
+    ]);
+    header("Location: " . strtok($_SERVER["REQUEST_URI"], '?') . "?msg=" . urlencode("Admission created successfully"));
+    exit;
+  } catch (PDOException $e) {
+    $error = "Failed to create admission: " . $e->getMessage();
+  }
+}
+
+// Handle Update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
+  try {
+    $stmt = $pdo->prepare("
+      UPDATE inpatient_admissions 
+      SET patient_id=?, admit_date=?, discharge_date=?, ward=?, bed=?, physician=?, diagnosis=?, treatment=?, notes=?
+      WHERE id=?
+    ");
+    $stmt->execute([
+      (int)$_POST['patient_id'],
+      $_POST['admit_date'] ?: null,
+      !empty($_POST['discharge_date']) ? $_POST['discharge_date'] : null,
+      trim($_POST['ward']),
+      trim($_POST['bed']),
+      trim($_POST['physician']),
+      trim($_POST['diagnosis']),
+      trim($_POST['treatment']),
+      trim($_POST['notes']),
+      (int)$_POST['id']
+    ]);
+    header("Location: " . strtok($_SERVER["REQUEST_URI"], '?') . "?msg=" . urlencode("Admission updated successfully"));
+    exit;
+  } catch (PDOException $e) {
+    $error = "Failed to update admission: " . $e->getMessage();
+  }
+}
+
+// Handle Delete
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
+  try {
+    $stmt = $pdo->prepare("DELETE FROM inpatient_admissions WHERE id = ?");
+    $stmt->execute([(int)$_POST['delete']]);
+    header("Location: " . strtok($_SERVER["REQUEST_URI"], '?') . "?msg=" . urlencode("Admission deleted successfully"));
+    exit;
+  } catch (PDOException $e) {
+    $error = "Failed to delete admission: " . $e->getMessage();
+  }
+}
+
+// Handle CSV Export
+if (isset($_GET['export_csv'])) {
+  $export_patient_id = isset($_GET['patient_id']) ? (int)$_GET['patient_id'] : 0;
+  $date_from = isset($_GET['date_from']) && $_GET['date_from'] !== '' ? $_GET['date_from'] : null;
+  $date_to = isset($_GET['date_to']) && $_GET['date_to'] !== '' ? $_GET['date_to'] : null;
+  $status = isset($_GET['status']) ? trim($_GET['status']) : '';
+
+  try {
+    $sql = "
+      SELECT 
+        ia.id,
+        ia.admit_date,
+        ia.discharge_date,
+        p.last_name,
+        p.first_name,
+        ia.ward,
+        ia.bed,
+        ia.physician,
+        ia.diagnosis,
+        ia.treatment,
+        ia.notes
+      FROM inpatient_admissions ia
+      JOIN patients p ON p.id = ia.patient_id
+      WHERE 1=1
+    ";
+    $params = [];
+
+    if ($export_patient_id > 0) {
+      $sql .= " AND ia.patient_id = :pid";
+      $params[':pid'] = $export_patient_id;
+    }
+
+    if ($date_from) {
+      $sql .= " AND DATE(ia.admit_date) >= :date_from";
+      $params[':date_from'] = $date_from;
+    }
+
+    if ($date_to) {
+      $sql .= " AND DATE(ia.admit_date) <= :date_to";
+      $params[':date_to'] = $date_to;
+    }
+
+    if ($status === 'active') {
+      $sql .= " AND ia.discharge_date IS NULL";
+    } elseif ($status === 'discharged') {
+      $sql .= " AND ia.discharge_date IS NOT NULL";
+    }
+
+    $sql .= " ORDER BY ia.admit_date DESC, ia.id DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $export_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Generate filename
+    $filename = "inpatient_admissions_" . date('Y-m-d_His') . ".csv";
+    
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    // Open output stream
+    $output = fopen('php://output', 'w');
+
+    // Add BOM for Excel UTF-8 support
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+    // Write CSV header
+    fputcsv($output, ['ID', 'Admit Date', 'Discharge Date', 'Last Name', 'First Name', 'Ward', 'Bed', 'Physician', 'Diagnosis', 'Treatment', 'Notes', 'Status']);
+
+    // Write data rows
+    foreach ($export_rows as $row) {
+      $status = $row['discharge_date'] ? 'Discharged' : 'Active';
+      fputcsv($output, [
+        $row['id'],
+        $row['admit_date'] ?? '',
+        $row['discharge_date'] ?? '',
+        $row['last_name'] ?? '',
+        $row['first_name'] ?? '',
+        $row['ward'] ?? '',
+        $row['bed'] ?? '',
+        $row['physician'] ?? '',
+        $row['diagnosis'] ?? '',
+        $row['treatment'] ?? '',
+        $row['notes'] ?? '',
+        $status
+      ]);
+    }
+
+    fclose($output);
+    exit;
+  } catch (PDOException $e) {
+    die("Export failed: " . $e->getMessage());
+  }
+}
+
 $patient_id = isset($_GET['patient_id']) ? (int)$_GET['patient_id'] : 0;
 $patient = null;
 if ($patient_id) {
@@ -11,9 +174,17 @@ if ($patient_id) {
 }
 
 $msg = isset($_GET['msg']) ? trim($_GET['msg']) : '';
+$error = $error ?? '';
 
 $stmt = $pdo->query("SELECT ia.*, p.last_name, p.first_name FROM inpatient_admissions ia JOIN patients p ON p.id = ia.patient_id ORDER BY ia.admit_date DESC");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get all patients for the export modal
+$patients = [];
+try {
+  $q = "SELECT id, last_name, first_name FROM patients ORDER BY last_name, first_name";
+  $patients = $pdo->query($q)->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
 ?>
 <?php include __DIR__ . "/../partials/header.php"; ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -80,6 +251,7 @@ body {
   transition: all 0.2s;
   box-shadow: 0 2px 4px rgba(6, 182, 212, 0.3);
   text-decoration: none;
+  cursor: pointer;
 }
 
 .btn-primary-custom:hover {
@@ -238,6 +410,33 @@ body {
   padding: 1.5rem;
 }
 
+.modal-footer {
+  border-top: 1px solid var(--border-light);
+  padding: 1rem 1.5rem;
+  background: var(--bg-light);
+}
+
+.form-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
+.form-control, .form-select {
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+  outline: none;
+}
+
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
@@ -254,20 +453,26 @@ body {
   <div class="page-header">
     <h1 class="page-title">In-Patient Admissions</h1>
     <div class="header-actions">
-      <a
-        href="new.php<?php echo $patient_id ? ('?patient_id='.(int)$patient_id) : '';?>"
-        class="btn-primary-custom"
-        data-bs-toggle="modal"
-        data-bs-target="#modalCrud"
-        data-title="New Admission"
-        data-url="new.php<?php echo $patient_id ? ('?patient_id='.(int)$patient_id) : '';?>">
+      <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#reportModal">
+        <i class="bi bi-file-earmark-text"></i> Generate Report
+      </button>
+      <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#admissionModal" onclick="resetAdmissionForm()">
         <i class="bi bi-plus-circle"></i> New Admission
-      </a>
+      </button>
     </div>
   </div>
 
   <?php if ($msg): ?>
-    <div class="alert-custom"><?php echo htmlspecialchars($msg); ?></div>
+    <div class="alert-custom alert-dismissible fade show" role="alert">
+      <?php echo htmlspecialchars($msg); ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <?php endif; ?>
+
+  <?php if ($error): ?>
+    <div class="alert-custom" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #991b1b;">
+      <?php echo htmlspecialchars($error); ?>
+    </div>
   <?php endif; ?>
 
   <div class="table-card">
@@ -303,27 +508,154 @@ body {
                 <a class="btn-action btn-view" href="/public/inpatient/view.php?id=<?php echo (int)$r['id']; ?>">
                   <i class="bi bi-eye"></i> View
                 </a>
-                <a
-                  href="/public/inpatient/edit.php?id=<?php echo (int)$r['id']; ?>"
-                  class="btn-action btn-edit"
-                  data-bs-toggle="modal"
-                  data-bs-target="#modalCrud"
-                  data-title="Edit Admission #<?php echo (int)$r['id']; ?>"
-                  data-url="/public/inpatient/edit.php?id=<?php echo (int)$r['id']; ?>">
+                <button type="button" class="btn-action btn-edit" onclick="editAdmission(<?php echo (int)$r['id']; ?>)" data-bs-toggle="modal" data-bs-target="#admissionModal">
                   <i class="bi bi-pencil"></i> Edit
-                </a>
-                <a
-                  class="btn-action btn-delete js-delete"
-                  href="/public/inpatient/delete.php?id=<?php echo (int)$r['id']; ?>"
-                  data-id="<?php echo (int)$r['id']; ?>">
+                </button>
+                <button type="button" class="btn-action btn-delete js-delete" data-id="<?php echo (int)$r['id']; ?>">
                   <i class="bi bi-trash"></i> Delete
-                </a>
+                </button>
               </td>
             </tr>
           <?php endforeach; ?>
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- Admission Modal (Create/Edit) -->
+<div class="modal fade" id="admissionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="admissionModalTitle">New Admission</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="admissionForm">
+        <input type="hidden" name="action" id="formAction" value="create">
+        <input type="hidden" name="id" id="admissionId">
+        
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="patient_id" class="form-label">Patient <span class="text-danger">*</span></label>
+              <select name="patient_id" id="patient_id" class="form-select" required>
+                <option value="">Select Patient</option>
+                <?php foreach ($patients as $p): ?>
+                  <option value="<?php echo (int)$p['id']; ?>">
+                    <?php echo htmlspecialchars($p['last_name'] . ', ' . $p['first_name']); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label for="admit_date" class="form-label">Admit Date <span class="text-danger">*</span></label>
+              <input type="date" name="admit_date" id="admit_date" class="form-control" required>
+            </div>
+
+            <div class="col-md-6">
+              <label for="discharge_date" class="form-label">Discharge Date</label>
+              <input type="date" name="discharge_date" id="discharge_date" class="form-control">
+            </div>
+
+            <div class="col-md-3">
+              <label for="ward" class="form-label">Ward</label>
+              <input type="text" name="ward" id="ward" class="form-control">
+            </div>
+
+            <div class="col-md-3">
+              <label for="bed" class="form-label">Bed</label>
+              <input type="text" name="bed" id="bed" class="form-control">
+            </div>
+
+            <div class="col-12">
+              <label for="physician" class="form-label">Physician</label>
+              <input type="text" name="physician" id="physician" class="form-control">
+            </div>
+
+            <div class="col-12">
+              <label for="diagnosis" class="form-label">Diagnosis</label>
+              <textarea name="diagnosis" id="diagnosis" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label for="treatment" class="form-label">Treatment Plan</label>
+              <textarea name="treatment" id="treatment" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label for="notes" class="form-label">Notes</label>
+              <textarea name="notes" id="notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Admission</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Report Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="get" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Export Admissions Report (CSV)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="export_csv" value="1">
+        
+        <div class="mb-3">
+          <label for="report_patient_id" class="form-label">Patient</label>
+          <select name="patient_id" id="report_patient_id" class="form-select">
+            <option value="">All Patients</option>
+            <?php foreach ($patients as $p): ?>
+              <option value="<?php echo (int)$p['id']; ?>" <?php echo $patient_id == (int)$p['id'] ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($p['last_name'] . ', ' . $p['first_name']); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="report_status" class="form-label">Status</label>
+          <select name="status" id="report_status" class="form-select">
+            <option value="">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="discharged">Discharged Only</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="date_from" class="form-label">Admit Date From</label>
+          <input type="date" name="date_from" id="date_from" class="form-control" 
+                 value="<?php echo date('Y-m-d', strtotime('-30 days')); ?>">
+        </div>
+
+        <div class="mb-3">
+          <label for="date_to" class="form-label">Admit Date To</label>
+          <input type="date" name="date_to" id="date_to" class="form-control" 
+                 value="<?php echo date('Y-m-d'); ?>">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
   </div>
 </div>
 
@@ -342,91 +674,50 @@ body {
 </div>
 
 <script>
-(function(){
-  const modal = document.getElementById('modalCrud');
-  if(!modal) return;
-  const bodyEl = modal.querySelector('#modalCrudBody');
-  const titleEl = modal.querySelector('#modalCrudTitle');
+// Store all admissions data for editing
+const admissionsData = <?php echo json_encode($rows); ?>;
 
-  modal.addEventListener('show.bs.modal', async function (ev) {
-    const trigger = ev.relatedTarget;
-    if (!trigger) return;
-    const url = trigger.getAttribute('data-url');
-    const title = trigger.getAttribute('data-title') || 'Form';
-    titleEl.textContent = title;
-    bodyEl.innerHTML = '<div class="text-center p-5">Loading…</div>';
-    try {
-      const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      const html = await res.text();
-      bodyEl.innerHTML = html;
+function resetAdmissionForm() {
+  document.getElementById('admissionModalTitle').textContent = 'New Admission';
+  document.getElementById('formAction').value = 'create';
+  document.getElementById('admissionForm').reset();
+  document.getElementById('admissionId').value = '';
+  document.getElementById('admit_date').value = new Date().toISOString().split('T')[0];
+}
 
-      const form = bodyEl.querySelector('form');
-      if (form) {
-        form.addEventListener('submit', async function(e){
-          e.preventDefault();
-          const fd = new FormData(form);
-          const action = form.getAttribute('action') || url;
-          const method = (form.getAttribute('method') || 'POST').toUpperCase();
-          const submitBtn = form.querySelector('[type="submit"]');
-          if (submitBtn) { submitBtn.disabled = true; submitBtn.dataset.originalText = submitBtn.innerHTML; submitBtn.innerHTML = 'Saving…'; }
-          try {
-            const resp = await fetch(action, {
-              method,
-              body: fd,
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
+function editAdmission(id) {
+  const admission = admissionsData.find(a => a.id == id);
+  if (!admission) return;
 
-            const ct = resp.headers.get('content-type') || '';
-            if (ct.includes('application/json')) {
-              const data = await resp.json();
-              if (data.ok) {
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                bsModal && bsModal.hide();
-                window.location.reload();
-                return;
-              }
-              if (data.html) { bodyEl.innerHTML = data.html; return; }
-            }
+  document.getElementById('admissionModalTitle').textContent = 'Edit Admission #' + id;
+  document.getElementById('formAction').value = 'update';
+  document.getElementById('admissionId').value = admission.id;
+  document.getElementById('patient_id').value = admission.patient_id;
+  document.getElementById('admit_date').value = admission.admit_date || '';
+  document.getElementById('discharge_date').value = admission.discharge_date || '';
+  document.getElementById('ward').value = admission.ward || '';
+  document.getElementById('bed').value = admission.bed || '';
+  document.getElementById('physician').value = admission.physician || '';
+  document.getElementById('diagnosis').value = admission.diagnosis || '';
+  document.getElementById('treatment').value = admission.treatment || '';
+  document.getElementById('notes').value = admission.notes || '';
+}
 
-            const text = await resp.text();
-            if (text && text.trim().length > 0) {
-              bodyEl.innerHTML = text;
-            } else {
-              const bsModal = bootstrap.Modal.getInstance(modal);
-              bsModal && bsModal.hide();
-              window.location.reload();
-            }
-          } catch (err) {
-            console.error(err);
-            alert('Something went wrong while saving.');
-          } finally {
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = submitBtn.dataset.originalText || 'Save'; }
-          }
-        }, { once: true });
-      }
-    } catch (e) {
-      console.error(e);
-      bodyEl.innerHTML = '<div class="alert alert-danger">Failed to load the form.</div>';
-    }
-  });
-
-  document.addEventListener('click', async function(e){
-    const a = e.target.closest('a.js-delete');
-    if (!a) return;
-    e.preventDefault();
-    if (!confirm('Delete this admission?')) return;
-    try {
-      const res = await fetch(a.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        alert('Delete failed.');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Delete failed.');
-    }
-  });
+// Delete handler
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.js-delete');
+  if (!btn) return;
+  e.preventDefault();
+  
+  const id = btn.getAttribute('data-id');
+  if (!confirm('Delete this admission?')) return;
+  
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.innerHTML = '<input type="hidden" name="delete" value="' + id + '">';
+  document.body.appendChild(form);
+  form.submit();
+});
 })();
 </script>
 

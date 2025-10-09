@@ -2,6 +2,87 @@
 $page_title = "BP Monitoring";
 require_once __DIR__ . "/../config.php";
 
+// Handle CSV Export
+if (isset($_GET['export_csv'])) {
+  $export_patient_id = isset($_GET['patient_id']) ? (int)$_GET['patient_id'] : 0;
+  $date_from = isset($_GET['date_from']) && $_GET['date_from'] !== '' ? $_GET['date_from'] : null;
+  $date_to = isset($_GET['date_to']) && $_GET['date_to'] !== '' ? $_GET['date_to'] : null;
+
+  try {
+    $sql = "
+      SELECT 
+        COALESCE(r.reading_time, r.created_at) as reading_datetime,
+        p.last_name,
+        p.first_name,
+        r.systolic,
+        r.diastolic,
+        r.pulse,
+        r.notes
+      FROM bp_readings r
+      JOIN patients p ON p.id = r.patient_id
+      WHERE 1=1
+    ";
+    $params = [];
+
+    if ($export_patient_id > 0) {
+      $sql .= " AND r.patient_id = :pid";
+      $params[':pid'] = $export_patient_id;
+    }
+
+    if ($date_from) {
+      $sql .= " AND DATE(COALESCE(r.reading_time, r.created_at)) >= :date_from";
+      $params[':date_from'] = $date_from;
+    }
+
+    if ($date_to) {
+      $sql .= " AND DATE(COALESCE(r.reading_time, r.created_at)) <= :date_to";
+      $params[':date_to'] = $date_to;
+    }
+
+    $sql .= " ORDER BY COALESCE(r.reading_time, r.created_at) DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $export_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Generate filename
+    $filename = "bp_readings_" . date('Y-m-d_His') . ".csv";
+    
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    // Open output stream
+    $output = fopen('php://output', 'w');
+
+    // Add BOM for Excel UTF-8 support
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+    // Write CSV header
+    fputcsv($output, ['Date & Time', 'Last Name', 'First Name', 'Systolic (mmHg)', 'Diastolic (mmHg)', 'Pulse (bpm)', 'Notes']);
+
+    // Write data rows
+    foreach ($export_rows as $row) {
+      fputcsv($output, [
+        $row['reading_datetime'] ? date('Y-m-d H:i:s', strtotime($row['reading_datetime'])) : '',
+        $row['last_name'],
+        $row['first_name'],
+        $row['systolic'],
+        $row['diastolic'],
+        $row['pulse'] ?? '',
+        $row['notes'] ?? ''
+      ]);
+    }
+
+    fclose($output);
+    exit;
+  } catch (PDOException $e) {
+    die("Export failed: " . $e->getMessage());
+  }
+}
+
 if (!isset($TABLE) || !$TABLE) { $TABLE = "bp_readings"; }
 if (!isset($total)) {
   try {
@@ -412,6 +493,9 @@ body {
       <span class="stat-badge">Total: <?php echo (int)$total; ?></span>
     </div>
     <div class="toolbar-right">
+      <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#reportModal">
+        <i class="bi bi-file-earmark-text"></i> Generate Report
+      </button>
       <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createModal">
         <i class="bi bi-plus-circle"></i> New Reading
       </button>
@@ -500,6 +584,61 @@ body {
   </div>
 </div>
 
+<!-- Report Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="get" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Export BP Report (CSV)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="export_csv" value="1">
+        
+        <?php if ($patient_id): ?>
+          <input type="hidden" name="patient_id" value="<?php echo (int)$patient_id; ?>">
+          <div class="mb-3">
+            <label class="form-label">Patient</label>
+            <input type="text" class="form-control" value="<?php echo htmlspecialchars($patient['last_name'] . ', ' . $patient['first_name']); ?>" disabled>
+          </div>
+        <?php else: ?>
+          <div class="mb-3">
+            <label for="report_patient_id" class="form-label">Patient</label>
+            <select name="patient_id" id="report_patient_id" class="form-select">
+              <option value="">All Patients</option>
+              <?php foreach ($patients as $p): ?>
+                <option value="<?php echo (int)$p['id']; ?>">
+                  <?php echo htmlspecialchars($p['last_name'] . ', ' . $p['first_name']); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        <?php endif; ?>
+
+        <div class="mb-3">
+          <label for="date_from" class="form-label">From Date</label>
+          <input type="date" name="date_from" id="date_from" class="form-control" 
+                 value="<?php echo date('Y-m-d', strtotime('-30 days')); ?>">
+        </div>
+
+        <div class="mb-3">
+          <label for="date_to" class="form-label">To Date</label>
+          <input type="date" name="date_to" id="date_to" class="form-control" 
+                 value="<?php echo date('Y-m-d'); ?>">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal fade" id="createModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-scrollable">
     <form method="post" class="modal-content">
@@ -556,18 +695,6 @@ body {
         <div class="mt-3">
           <label for="notes" class="form-label">Notes</label>
           <textarea name="notes" id="notes" class="form-control" rows="3" placeholder="Optional notes..."></textarea>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Reading</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<?php include __DIR__ . "/../partials/footer.php"; ?>class="form-control" rows="3" placeholder="Optional notes..."></textarea>
         </div>
       </div>
 

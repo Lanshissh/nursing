@@ -14,7 +14,7 @@ function redirect_with_msg($msg){
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'medicine' && isset($_GET['id'])) {
   header('Content-Type: application/json');
   $id = (int)$_GET['id'];
-  $stmt = $pdo->prepare("SELECT id, name, generic_name, category, unit, quantity, reorder_level, expiry_date, supplier, notes FROM {$TABLE} WHERE id = ?");
+  $stmt = $pdo->prepare("SELECT id, name, generic_name, category, unit, quantity, expiry_date, supplier, notes FROM {$TABLE} WHERE id = ?");
   $stmt->execute([$id]);
   $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
   echo json_encode($row);
@@ -23,14 +23,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'medicine' && isset($_GET['id'])) 
 
 // Create - FIXED: removed extra parameter in execute()
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['__action'] ?? '') === 'create') {
-  $stmt = $pdo->prepare("INSERT INTO {$TABLE} (name, generic_name, category, unit, quantity, reorder_level, expiry_date, supplier, notes) VALUES (?,?,?,?,?,?,?,?,?)");
+  $stmt = $pdo->prepare("INSERT INTO {$TABLE} (name, generic_name, category, unit, quantity, expiry_date, supplier, notes) VALUES (?,?,?,?,?,?,?,?,?)");
   $stmt->execute([
     trim($_POST['name'] ?? ''),
     trim($_POST['generic_name'] ?? ''),
     trim($_POST['category'] ?? ''),
     trim($_POST['unit'] ?? ''),
     (int)($_POST['quantity'] ?? 0),
-    (int)($_POST['reorder_level'] ?? 0),
     $_POST['expiry_date'] !== '' ? $_POST['expiry_date'] : null,
     trim($_POST['supplier'] ?? ''),
     trim($_POST['notes'] ?? '')
@@ -41,14 +40,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['__action'] ?? '') === 'cre
 // Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['__action'] ?? '') === 'update') {
   $id = (int)($_POST['id'] ?? 0);
-  $stmt = $pdo->prepare("UPDATE {$TABLE} SET name=?, generic_name=?, category=?, unit=?, quantity=?, reorder_level=?, expiry_date=?, supplier=?, notes=? WHERE id=?");
+  $stmt = $pdo->prepare("UPDATE {$TABLE} SET name=?, generic_name=?, category=?, unit=?, quantity=?, expiry_date=?, supplier=?, notes=? WHERE id=?");
   $stmt->execute([
     trim($_POST['name'] ?? ''),
     trim($_POST['generic_name'] ?? ''),
     trim($_POST['category'] ?? ''),
     trim($_POST['unit'] ?? ''),
     (int)($_POST['quantity'] ?? 0),
-    (int)($_POST['reorder_level'] ?? 0),
     $_POST['expiry_date'] !== '' ? $_POST['expiry_date'] : null,
     trim($_POST['supplier'] ?? ''),
     trim($_POST['notes'] ?? ''),
@@ -91,10 +89,6 @@ if ($category_filter !== '') {
   $params[] = $category_filter;
 }
 
-if ($low_stock) {
-  $where[] = "quantity <= reorder_level";
-}
-
 $sql = "SELECT * FROM {$TABLE}";
 if ($where) {
   $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -118,7 +112,6 @@ $low_stock_count = 0;
 $expired_count = 0;
 
 foreach ($rows as $r) {
-  if ($r['quantity'] <= $r['reorder_level']) $low_stock_count++;
   if ($r['expiry_date'] && strtotime($r['expiry_date']) < time()) $expired_count++;
 }
 
@@ -620,10 +613,8 @@ body {
           <?php foreach ($rows as $r): ?>
             <?php
               $quantity = (int)$r['quantity'];
-              $reorder = (int)$r['reorder_level'];
               $stock_class = 'stock-normal';
               if ($quantity == 0) $stock_class = 'stock-out';
-              elseif ($quantity <= $reorder) $stock_class = 'stock-low';
               
               $expiry_class = '';
               if ($r['expiry_date']) {
@@ -705,10 +696,6 @@ body {
               <input type="number" name="quantity" class="form-control" required min="0">
             </div>
             <div class="col-md-4">
-              <label class="form-label">Reorder Level</label>
-              <input type="number" name="reorder_level" class="form-control" min="0" value="10">
-            </div>
-            <div class="col-md-4">
               <label class="form-label">Expiry Date</label>
               <input type="date" name="expiry_date" class="form-control">
             </div>
@@ -763,10 +750,6 @@ body {
             <div class="col-md-4">
               <label class="form-label">Quantity <span class="text-danger">*</span></label>
               <input type="number" name="quantity" id="edit_quantity" class="form-control" required min="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Reorder Level</label>
-              <input type="number" name="reorder_level" id="edit_reorder_level" class="form-control" min="0">
             </div>
             <div class="col-md-4">
               <label class="form-label">Expiry Date</label>
@@ -837,7 +820,6 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('edit_category').value = data.category || '';
           document.getElementById('edit_unit').value = data.unit || '';
           document.getElementById('edit_quantity').value = data.quantity || 0;
-          document.getElementById('edit_reorder_level').value = data.reorder_level || 0;
           document.getElementById('edit_expiry_date').value = data.expiry_date || '';
           document.getElementById('edit_supplier').value = data.supplier || '';
           document.getElementById('edit_notes').value = data.notes || '';

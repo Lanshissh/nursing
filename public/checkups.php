@@ -4,6 +4,89 @@ require_once __DIR__ . "/../config.php";
 
 $TABLE = 'checkups';
 
+// Handle CSV Export
+if (isset($_GET['export_csv'])) {
+  $export_patient_id = isset($_GET['patient_id']) ? (int)$_GET['patient_id'] : 0;
+  $date_from = isset($_GET['date_from']) && $_GET['date_from'] !== '' ? $_GET['date_from'] : null;
+  $date_to = isset($_GET['date_to']) && $_GET['date_to'] !== '' ? $_GET['date_to'] : null;
+
+  try {
+    $sql = "
+      SELECT 
+        c.id,
+        c.visit_date,
+        p.last_name,
+        p.first_name,
+        c.complaint,
+        c.diagnosis,
+        c.treatment,
+        c.notes
+      FROM {$TABLE} c
+      LEFT JOIN patients p ON p.id = c.patient_id
+      WHERE 1=1
+    ";
+    $params = [];
+
+    if ($export_patient_id > 0) {
+      $sql .= " AND c.patient_id = :pid";
+      $params[':pid'] = $export_patient_id;
+    }
+
+    if ($date_from) {
+      $sql .= " AND DATE(c.visit_date) >= :date_from";
+      $params[':date_from'] = $date_from;
+    }
+
+    if ($date_to) {
+      $sql .= " AND DATE(c.visit_date) <= :date_to";
+      $params[':date_to'] = $date_to;
+    }
+
+    $sql .= " ORDER BY c.visit_date DESC, c.id DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $export_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Generate filename
+    $filename = "checkups_" . date('Y-m-d_His') . ".csv";
+    
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    // Open output stream
+    $output = fopen('php://output', 'w');
+
+    // Add BOM for Excel UTF-8 support
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+    // Write CSV header
+    fputcsv($output, ['ID', 'Visit Date', 'Last Name', 'First Name', 'Chief Complaint', 'Diagnosis', 'Treatment/Plan', 'Notes']);
+
+    // Write data rows
+    foreach ($export_rows as $row) {
+      fputcsv($output, [
+        $row['id'],
+        $row['visit_date'] ?? '',
+        $row['last_name'] ?? '',
+        $row['first_name'] ?? '',
+        $row['complaint'] ?? '',
+        $row['diagnosis'] ?? '',
+        $row['treatment'] ?? '',
+        $row['notes'] ?? ''
+      ]);
+    }
+
+    fclose($output);
+    exit;
+  } catch (PDOException $e) {
+    die("Export failed: " . $e->getMessage());
+  }
+}
+
 function redirect_with_msg($msg){
   $base = strtok($_SERVER['REQUEST_URI'], '?');
   header("Location: {$base}?msg=" . urlencode($msg));
@@ -79,6 +162,13 @@ $sql .= ' ORDER BY c.visit_date DESC, c.id DESC';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get all patients for the export modal
+$patients = [];
+try {
+  $q = "SELECT id, last_name, first_name FROM patients ORDER BY last_name, first_name";
+  $patients = $pdo->query($q)->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
 
 include __DIR__ . "/../partials/header.php";
 ?>
@@ -357,6 +447,9 @@ body {
         <input type="text" class="search-input" name="q" placeholder="Search check-ups..." value="<?php echo htmlspecialchars($q); ?>">
         <button type="submit" class="btn-search">Search</button>
       </form>
+      <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#reportModal">
+        <i class="bi bi-file-earmark-text"></i> Generate Report
+      </button>
       <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createModal">
         <i class="bi bi-plus-circle"></i> New Check-up
       </button>
@@ -406,6 +499,53 @@ body {
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- Report Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="get" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Export Check-ups Report (CSV)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="export_csv" value="1">
+        
+        <div class="mb-3">
+          <label for="report_patient_id" class="form-label">Patient</label>
+          <select name="patient_id" id="report_patient_id" class="form-select">
+            <option value="">All Patients</option>
+            <?php foreach ($patients as $p): ?>
+              <option value="<?php echo (int)$p['id']; ?>" <?php echo $patient_id == (int)$p['id'] ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($p['last_name'] . ', ' . $p['first_name']); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="date_from" class="form-label">From Date</label>
+          <input type="date" name="date_from" id="date_from" class="form-control" 
+                 value="<?php echo date('Y-m-d', strtotime('-30 days')); ?>">
+        </div>
+
+        <div class="mb-3">
+          <label for="date_to" class="form-label">To Date</label>
+          <input type="date" name="date_to" id="date_to" class="form-control" 
+                 value="<?php echo date('Y-m-d'); ?>">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
